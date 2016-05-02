@@ -34,7 +34,7 @@
 (define s null)
 (define running 1)
 (define window "")
-(define-values (irccon ready-event) (irc-connect "irc.entropynet.net" 6667 "AllieRacket" "Allie" "Allie Fox"))
+(define-values (irccon ready-event) (irc-connect "irc.freenode.net" 6667 "AllieRacket" "Allie" "Allie Fox"))
 
         
 (define (write_to_curses_format str)
@@ -96,7 +96,8 @@
    ;   #f)
   (match l
     [-1 #f]
-    [(or 263 127) (set! s (cdr s))]
+    [(or 263 127) (cond
+                    [(pair? s) (set! s (cdr s))])]
     [10 (commandparse s)(set! s null)]
     [_ (set! s (cons (integer->char l) s))])
   (werase inputwin)
