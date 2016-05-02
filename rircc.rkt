@@ -1,6 +1,7 @@
 #lang racket
 (require "ui/curses.rkt")
 (require "ui/irc.rkt")
+(require "ui/curses/window.rkt")
 (require irc)
 (require racket/match)
 (require racket/async-channel)
@@ -10,35 +11,55 @@
 
 
 
-(define win (initscr))
+(define win
+  (new window-class%
+       [input-raw #t]
+       [input-echo #f]
+       [color #t]))
 (define stderr (open-output-file "/dev/stderr" #:exists 'append))
-(raw)
-(noecho)
-(timeout 5)
-(keypad win #t)
-(start_color)
+;(keypad win #t)
 (init_pair 1 COLOR_BLACK COLOR_RED)
-(define x (getmaxx win))
-(define y (getmaxy win))
-(define titlewin (subwin win 1 x 0 0))
-(define displaywin (subwin win (- y 2) x 1 0))
-(define inputwin (subwin win 1 x (- y 1) 0))
-(syncok titlewin #t)
-(wattron titlewin (COLOR_PAIR 1))
-(syncok displaywin #t)
-(scrollok displaywin #t)
-(syncok inputwin #t)
-(wtimeout inputwin 50)
-(void (waddstr titlewin (string-append "FoxIRC" (make-string (- x 6) #\space))))
-(void (wrefresh win))
+(define x (send win maxx))
+(define y (send win maxy))
+(define titlewin
+  (new window-class%
+       [parent win]
+       [height 1]
+       [width x]
+       [y 0]
+       [x 0]
+       [syncup #t]))
+(send titlewin attron (COLOR_PAIR 1))
+(define displaywin
+  (new window-class%
+       [parent win]
+       [height (- y 2)]
+       [width x]
+       [y 1]
+       [x 0]
+       [syncup #t]
+       [scroll #t]))
+       
+(define inputwin
+  (new window-class%
+       [parent win]
+       [height 1]
+       [width x]
+       [y (- y 1)]
+       [x 0]
+       [syncup #t]
+       [input-timeout 50]))
+       
+(void (send titlewin addstr (string-append "FoxIRC" (make-string (- x 6) #\space))))
+(send win refresh)
 (define s null)
 (define running 1)
 (define window "")
-(define-values (irccon ready-event) (irc-connect "irc.freenode.net" 6667 "AllieRacket" "Allie" "Allie Fox"))
+(define-values (irccon ready-event) (irc-connect "irc.entropynet.net" 6667 "AllieRacket" "Allie" "Allie Fox"))
 
         
 (define (write_to_curses_format str)
-  (let ([maxx (getmaxx displaywin)])
+  (let ([maxx (send displaywin maxx)])
     (let ([chars (string->list str)])
       (let ([bold #f])
         (let ([_write_formatted_char (lambda (ch)
@@ -46,22 +67,22 @@
                     [2 (cond
                          [(false? bold)
                           (set! bold #t)
-                          (wattron displaywin A_BOLD)]
+                          (send displaywin attron A_BOLD)]
                          [else
-                          (wattrset displaywin A_NORMAL)
+                          (send displaywin attroff A_BOLD)
                           (set! bold #f)])]
                     [1 #f]
                     [13 #f]
-                    [_ (waddstr displaywin (string ch))]))])
+                    [_ (send displaywin addstr (string ch))]))])
         (cond
           [(> (length chars) maxx)
            (map _write_formatted_char (take chars (- maxx 1)))
-           (waddstr displaywin "\n")
+           (send displaywin addstr "\n")
            (write_to_curses_format (list->string (list-tail chars (- maxx 1))))]
           (else
            (map _write_formatted_char chars)
-           (waddstr displaywin "\n")))))))
-  (wattrset displaywin A_NORMAL)
+           (send displaywin addstr "\n")))))))
+  (send displaywin attrset A_NORMAL)
   #t)
     
  (define (commandparse s)
@@ -83,7 +104,7 @@
 
 (define ircmsgs (irc-connection-incoming irccon))
 (let loop ()
-  (define l (wgetch inputwin))
+  (define l (send inputwin getch))
  
   (define msg (async-channel-try-get ircmsgs))
 ;  (display msg)
@@ -100,13 +121,13 @@
                     [(pair? s) (set! s (cdr s))])]
     [10 (commandparse s)(set! s null)]
     [_ (set! s (cons (integer->char l) s))])
-  (werase inputwin)
-  (wmove inputwin (- y 1) 0)
-  (waddstr inputwin (list->string (filter (lambda (s) (char? s)) (reverse s))))
+  (send inputwin erase)
+  (send inputwin move (- y 1) 0)
+  (send inputwin addstr (list->string (filter (lambda (s) (char? s)) (reverse s))))
   ; refresh our displays, with input last.
-  (wrefresh win)
+  (send win refresh)
   (if (> running 0)
         (loop)
         #f))
 
-(void (endwin))
+(void (send win end))
