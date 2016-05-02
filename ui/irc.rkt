@@ -120,7 +120,7 @@
                                                 (first(irc-message-parameters m)) 
                                                 (last (irc-message-parameters m) ))
                                     )]
-                    [_ (irc-message-content m)])]
+                    [_ #f]
        [(? isServer?)
         (match (irc-message-command m)
           ["NOTICE" (format "[SERVER(~a)] * ~a: ~a"
@@ -129,13 +129,13 @@
                             (last(irc-message-parameters m)))]
           ["MODE" (format "-*- you are now mode(s) ~a" 
                           (last(irc-message-parameters m)))]
-          [(or (regexp "00[123]") (regexp "37[256]") ) (format "-*- ~a" (last (irc-message-parameters m)))] 
+          [(or (regexp "00[123]") (regexp "37[256]") ) "NOTHITTING"]
           [(or (regexp "00[45]") (regexp "25[01245]")) (format "-*- ~a" (string-join (list-tail (irc-message-parameters m) 1) " "))]
           [(regexp "26[56]") (format "-*- ~a" 
                                      (last(list-tail (irc-message-parameters m) 3)))]
-          [_ (irc-message-content m)])
+          [_ #f])])
         ]
-       [_ (irc-message-content m)] 
+       [_ #f] 
     )]
     [_ (format "~a" m)]
 ))

@@ -14,6 +14,7 @@
 (define-curses initscr (_fun -> _WINDOW-pointer))
 (define-curses subwin  (_fun _WINDOW-pointer _int _int _int _int -> _WINDOW-pointer))
 (define-curses waddstr (_fun _WINDOW-pointer _string -> _int))
+(define-curses waddch  (_fun _WINDOW-pointer _string -> _int))
 (define-curses wrefresh (_fun _WINDOW-pointer -> _int))
 (define-curses doupdate (_fun -> _void))
 (define-curses wnoutrefresh (_fun _WINDOW-pointer -> _int))
@@ -54,6 +55,7 @@
 (define-curses init_color (_fun _short _short _short _short -> _int))
 (define-curses wattron (_fun _WINDOW-pointer _int -> _int))
 (define-curses wattroff (_fun _WINDOW-pointer _int -> _int))
+(define-curses wattrset (_fun _WINDOW-pointer _int -> _int))
 (define-curses mvcur (_fun _int _int _int _int -> _int))
 ;(define-curses setsyx (_fun _int _int -> _int))
 

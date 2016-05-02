@@ -28,21 +28,57 @@
 (syncok displaywin #t)
 (scrollok displaywin #t)
 (syncok inputwin #t)
-(wcursyncup inputwin)
 (wtimeout inputwin 50)
 (void (waddstr titlewin (string-append "FoxIRC" (make-string (- x 6) #\space))))
 (void (wrefresh win))
 (define s null)
 (define running 1)
+(define window "")
 (define-values (irccon ready-event) (irc-connect "irc.entropynet.net" 6667 "AllieRacket" "Allie" "Allie Fox"))
-(define (commandparse s)
+
+        
+(define (write_to_curses_format str)
+  (let ([maxx (getmaxx displaywin)])
+    (let ([chars (string->list str)])
+      (let ([bold #f])
+        (let ([_write_formatted_char (lambda (ch)
+              (match (char->integer ch)
+                    [2 (cond
+                         [(false? bold)
+                          (set! bold #t)
+                          (wattron displaywin A_BOLD)]
+                         [else
+                          (wattrset displaywin A_NORMAL)
+                          (set! bold #f)])]
+                    [1 #f]
+                    [13 #f]
+                    [_ (waddstr displaywin (string ch))]))])
+        (cond
+          [(> (length chars) maxx)
+           (map _write_formatted_char (take chars (- maxx 1)))
+           (waddstr displaywin "\n")
+           (write_to_curses_format (list->string (list-tail chars (- maxx 1))))]
+          (else
+           (map _write_formatted_char chars)
+           (waddstr displaywin "\n")))))))
+  (wattrset displaywin A_NORMAL)
+  #t)
+    
+ (define (commandparse s)
   (let ([str (list->string (filter (lambda (s) (char? s)) (reverse s)))])
     (match str
       [(pregexp "^/(.*?) (.*)$" (list _ cmd rest)) (match (string-downcase cmd)
-                                                                           ["join" (irc-join-channel irccon rest)])]
+                                                     ["join" (irc-join-channel irccon rest)]
+                                                     ["win"  (set! window rest)])]
       [(pregexp "^/(.*?)$" (list _ cmd)) (match (string-downcase cmd)
                                            ["quit" (set! running -1)])]
-      [_ #f])))
+      [_ (cond
+           [(string=? window "") #f]
+           [else
+            (irc-send-message irccon window str)
+            (write_to_curses_format (irc-output (splitmsg (string-append ":AllieRacket!fake@fake PRIVMSG " window " :" str))))])])))   
+
+(void (write_to_curses_format "\x02helo\x02 helo"))
 (void (sync ready-event))
 
 (define ircmsgs (irc-connection-incoming irccon))
@@ -51,9 +87,9 @@
  
   (define msg (async-channel-try-get ircmsgs))
 ;  (display msg)
-  (match msg
+  (void (match msg
     [#f #f]
-    [_ (if (not (string=? "" (irc-output msg))) (waddstr displaywin (string-append (irc-output (reparse msg)))) #f)])
+    [_ (if (string? (irc-output (reparse msg))) (write_to_curses_format (string-append (irc-output (reparse msg)))) #f)]))
     ;[_ (waddstr displaywin (format "bleh ~a\n" msg))])
  ; (if (> l -1)
   ;    (waddstr displaywin (format "~a\n" l))
