@@ -2,7 +2,7 @@
 (require "ui/curses.rkt")
 (require "ui/irc.rkt")
 (require "ui/curses/window.rkt")
-(require irc)
+(require "irc/irc.rkt")
 (require racket/match)
 (require racket/async-channel)
 
@@ -39,7 +39,6 @@
        [x 0]
        [syncup #t]
        [scroll #t]))
-       
 (define inputwin
   (new window-class%
        [parent win]
@@ -49,13 +48,19 @@
        [x 0]
        [syncup #t]
        [input-timeout 50]))
-       
-(void (send titlewin addstr (string-append "FoxIRC" (make-string (- x 6) #\space))))
+(void (send titlewin addstr (string-append "rircc" (make-string (- x 6) #\space))))
 (send win refresh)
 (define s null)
 (define running 1)
 (define window "")
-(define-values (irccon ready-event) (irc-connect "irc.entropynet.net" 6667 "AllieRacket" "Allie" "Allie Fox"))
+
+(define en (new irc%
+                [host "irc.entropynet.net"]
+                [port 6697]
+                [ssl #t]
+                [nick "AllieRacket"]
+                [user "Allie"]
+                [realname "Allie Fox"]))
 
         
 (define (write_to_curses_format str)
@@ -89,28 +94,30 @@
   (let ([str (list->string (filter (lambda (s) (char? s)) (reverse s)))])
     (match str
       [(pregexp "^/(.*?) (.*)$" (list _ cmd rest)) (match (string-downcase cmd)
-                                                     ["join" (irc-join-channel irccon rest)]
+                                                     ["join" (send en join rest)]
                                                      ["win"  (set! window rest)])]
       [(pregexp "^/(.*?)$" (list _ cmd)) (match (string-downcase cmd)
                                            ["quit" (set! running -1)])]
       [_ (cond
            [(string=? window "") #f]
            [else
-            (irc-send-message irccon window str)
+            (send en msg window str)
             (write_to_curses_format (irc-output (splitmsg (string-append ":AllieRacket!fake@fake PRIVMSG " window " :" str))))])])))   
 
 (void (write_to_curses_format "\x02helo\x02 helo"))
-(void (sync ready-event))
+(void (sync (send en ready?)))
 
-(define ircmsgs (irc-connection-incoming irccon))
+(define ircmsgs (send en hosepipe!))
 (let loop ()
   (define l (send inputwin getch))
- 
-  (define msg (async-channel-try-get ircmsgs))
-;  (display msg)
+  (define raw  (async-channel-try-get ircmsgs))
+  (define msg (match raw
+                [#f #f]
+                [_ raw]))
+  ;  (display msg
   (void (match msg
     [#f #f]
-    [_ (if (string? (irc-output (reparse msg))) (write_to_curses_format (string-append (irc-output (reparse msg)))) #f)]))
+    [_ (if (string? (irc-output (reparse msg))) (write_to_curses_format (format "~a" (irc-output  msg))) #f)]))
     ;[_ (waddstr displaywin (format "bleh ~a\n" msg))])
  ; (if (> l -1)
   ;    (waddstr displaywin (format "~a\n" l))
