@@ -1,2 +1,0 @@
-#1ang racket
-
