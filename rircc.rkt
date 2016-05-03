@@ -1,6 +1,6 @@
 #lang racket
 (require "ui/curses.rkt")
-(require "ui/irc.rkt")
+(require "ui/irc-to.rkt")
 (require "ui/curses/window.rkt")
 (require "irc/irc.rkt")
 (require racket/match)
@@ -9,6 +9,64 @@
 
 
 
+
+(define to-handlers
+  (make-hash (list
+   (cons 'default (new irc-text-object%
+                       [fmt "~a"]))
+   (cons 'MOTD (new irc-text-object%
+                    [fmt "-!- ~a"]
+                    [mat (lambda (p v)
+                           (regexp-match? #rx#"37[256]" v))]
+                    [app
+                     (lambda (msg)
+                       (list (last (send msg args))))]))
+   (cons 'HIDDENHOST (new irc-text-object%
+                          [fmt "-!- ~a is now your hidden host"]
+                          [mat (lambda (p v)
+                                 (regexp-match? #rx#"396" v))]
+                          [app (lambda (msg)
+                                 (list (list-ref (send msg args) 1)))]))
+   (cons 'PRIVMSGNOTICE (new irc-text-object%
+                      [mat (lambda (p v)
+                             (or (string=? v "PRIVMSG") (string=? v "NOTICE")))]
+                      [fmt "[~a] <~a> ~a"]
+                      [app (lambda (msg)
+                             (let ([hs (new hostmask%
+                                         [prefix (send msg prefix)])])
+                             (list 
+                              (first (send msg args))
+                              (cond
+                                [(send hs isserver?) (send hs host)]
+                                [else (send hs nick)])
+                              (last (send msg args)))))]))
+   
+   (cons 'JOIN (new irc-text-object%
+                 [mat (lambda (p v)
+                        (string=? v "JOIN"))]
+                        [fmt "* ~a (~a@~a) -> ~a"]
+                        [app (lambda (msg)
+                               (let ([hs (new hostmask% [prefix (send msg prefix)])])
+                                 (list
+                                  (send hs nick)
+                                  (send hs ident)
+                                  (send hs host)
+                                  (first (send msg args)))))])))))
+
+
+(define (irc-output msg)
+  (last (sort (filter string? (for/list ([kv (hash->list to-handlers)])
+                                       (send (cdr kv) parse msg)))
+                     (lambda (x y)
+                       (cond
+                         [(and (string=? (substring x 0 1) ":") (false? (string=? (substring y 0 1) ":"))) #t]
+                         [(and (string=? (substring y 0 1) ":") (false? (string=? (substring x 0 1) ":"))) #f])))))
+                          
+
+;; not using mat.
+;(define (irc-ouput msg)
+;  (send (hash-ref to-handlers (string->symbol (send msg verb)) (hash-ref to-handlers 'default)) parse msg))
+    
 
 
 (define win
@@ -89,7 +147,6 @@
            (send displaywin addstr "\n")))))))
   (send displaywin attrset A_NORMAL)
   #t)
-    
  (define (commandparse s)
   (let ([str (list->string (filter (lambda (s) (char? s)) (reverse s)))])
     (match str
@@ -102,7 +159,8 @@
            [(string=? window "") #f]
            [else
             (send en msg window str)
-            (write_to_curses_format (irc-output (splitmsg (string-append ":AllieRacket!fake@fake PRIVMSG " window " :" str))))])])))   
+            (write_to_curses_format (irc-output (new irc-message%
+                                                     [msg (string-append ":AllieRacket!fake@fake PRIVMSG " window " :" str)])))])])))   
 
 (void (write_to_curses_format "\x02helo\x02 helo"))
 (void (sync (send en ready?)))
@@ -117,7 +175,7 @@
   ;  (display msg
   (void (match msg
     [#f #f]
-    [_ (if (string? (irc-output (reparse msg))) (write_to_curses_format (format "~a" (irc-output  msg))) #f)]))
+    [_ (if (string? (irc-output msg)) (write_to_curses_format (format "~a" (irc-output msg))) #f)]))
     ;[_ (waddstr displaywin (format "bleh ~a\n" msg))])
  ; (if (> l -1)
   ;    (waddstr displaywin (format "~a\n" l))

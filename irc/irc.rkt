@@ -71,7 +71,7 @@
     (set! handler (lambda (out in-ch line)
                     ;(displayln line)
                     (define msg (new irc-message% [msg line]))
-                    (async-channel-put in-ch line)
+                    (async-channel-put in-ch msg)
                     (when (is-a? msg irc-message%)
                       (for ([kv (hash->list handlers)])
                         ((cdr kv) msg out in-ch (car kv))))
@@ -133,5 +133,34 @@
        (set! pfix (removesep p))
        (set! vrb c)
        (set! ars (argsplit a))])))
-                   
+
+
+(define hostmask%
+  (class object%
+    (init-field
+     prefix
+     (ni "")
+     (ho "")
+     (id "")
+     (se "")
+     (isserver #f))
+    (define/public (nick)
+      (if isserver "" ni))
+    (define/public (host)
+      (if isserver se ho))
+    (define/public (ident)
+      (if isserver "" id))
+    (define/public (server)
+      (if (false? isserver)
+          #f
+          se))
+    (define/public (isserver?)
+      isserver)
+    (super-new)
+    (match prefix
+      [(pregexp "^:(.*)!(.*)@(.*)" (list _ a b c)) (set! ni a)(set! id b) (set! ho c)]
+      [(pregexp "(.*)!(.*)@(.*)" (list _ a b c)) (set! ni a)(set! id b) (set! ho c)]
+      [(pregexp "^:(.*)" (list _ s)) (set! isserver #t)(set! se s)]
+      [(pregexp "(.*)" (list _ s)) (set! isserver #t)(set! se s)])))
+     
   
