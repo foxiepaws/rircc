@@ -49,7 +49,7 @@
       [(false? parent) (set! win (initscr))]
       [(is-a? parent this%)
        (set! win (subwin (send parent getwin) height width y x))])
-    (cond
+     (cond
       ((false? parent)
        (cond
          (input-raw (raw)))
@@ -62,6 +62,8 @@
       ((positive? input-timeout) (wtimeout win input-timeout)))
     (cond 
       (syncup (syncok win #t)))
+    (cond
+      (scroll (scrollok win #t)))
      ))
 
 
